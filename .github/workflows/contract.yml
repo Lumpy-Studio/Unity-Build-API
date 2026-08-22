@@ -18,11 +18,24 @@ jobs:
           version: '1.34.0'
       - run: buf lint
       - run: buf build
-      - name: Publish to the Buf Schema Registry
-        if: github.event_name == 'push' && vars.BUF_PUBLISH_ENABLED == 'true'
-        env:
-          BUF_TOKEN: ${{ secrets.BUF_TOKEN }}
-        run: buf push
       - name: Check wire compatibility
         if: github.event_name == 'pull_request'
         run: buf breaking --against '.git#branch=origin/main'
+
+  publish-bsr:
+    if: github.event_name == 'push'
+    needs: contract
+    runs-on: ubuntu-latest
+    env:
+      BUF_TOKEN: ${{ secrets.BUF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.34.0'
+      - name: Publish to the Buf Schema Registry
+        if: ${{ env.BUF_TOKEN != '' }}
+        run: buf push
+      - name: Report GitHub-only distribution
+        if: ${{ env.BUF_TOKEN == '' }}
+        run: echo "::notice::BUF_TOKEN is not configured; the tagged GitHub contract remains the supported distribution channel."
