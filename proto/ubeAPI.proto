@@ -1,9 +1,3 @@
-/*
-protoc --go_out=D:\Unity-Build-BE_GO\app\protosCompiled\ubeAPI
- --go_opt=paths=source_relative --go-grpc_out=D:\Unity-Build-BE_GO\app\protosCompiled\ubeAPI
- --go-grpc_opt=paths=source_relative --proto_path=D:\Unity-Build-BE_GO\app\protos D:\Unity-Build-BE_GO\app\protos\ubeAPI.proto
-*/
-
 syntax = "proto3";
 option go_package = "github.com/Lumpy-Studio/Unity-Build-API/gen/go/ubeapi";
 import "financial_reporting_types.proto";

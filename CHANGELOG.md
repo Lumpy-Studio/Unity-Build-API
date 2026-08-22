@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1
+
+- Remove backend-local compilation instructions from the distributed source header.
+
 ## 1.0.0
 
 - Initial supported distribution of the existing `UBEAPIService` contract.
