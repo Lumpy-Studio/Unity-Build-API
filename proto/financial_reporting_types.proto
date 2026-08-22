@@ -1,0 +1,284 @@
+// Public, service-free financial reporting types shared by UBEAPIService and QBOService.
+// Keep this file limited to the transitive message and enum closure required by ubeAPI.proto.
+
+syntax = "proto3";
+option go_package = "github.com/Lumpy-Studio/Unity-Build-API/gen/go/financialreporting";
+
+import "google/protobuf/timestamp.proto";
+
+enum QboMappingSyncStatus {
+    QBO_MAPPING_SYNC_STATUS_UNSPECIFIED = 0;   // Default/unknown state
+    QBO_MAPPING_SYNC_STATUS_NOT_MAPPED = 1;    // No QBO mapping configured
+    QBO_MAPPING_SYNC_STATUS_MAPPED = 2;        // Actively mapped to a QBO project
+    QBO_MAPPING_SYNC_STATUS_NEEDS_ATTENTION = 3; // Mapping exists but has issues
+    QBO_MAPPING_SYNC_STATUS_USES_PRIME = 4;    // Estimate inherits contract's mapping (isPrimeProject=true)
+}
+
+message AssociatedEstimateWithQboMapping {
+    string associated_estimate_id = 1;      // Associated estimate relationship ID (used for QBO mapping)
+    string estimate_id = 2;                 // Internal estimate UUID
+    string breakout_summary_id = 3;         // Breakout summary ID (for association)
+    string custom_id = 4;                   // User-defined estimate ID
+    string name = 5;                        // Estimate name
+    string description = 6;                 // Estimate description
+    string due_date = 7;                    // Due date (YYYY-MM-DD)
+    string date_created = 8;                // Creation date
+    string last_updated = 9;                // Last modification date
+    string master_format_division_id = 10;
+    string master_format_division_name = 11;
+    string estimate_status_name = 12;
+    bool is_prime_project = 13;             // Authoritative flag from estimate_contract.is_prime
+    
+    // QBO mapping information (keyed by associated_estimate_id)
+    QboMappingSyncStatus qbo_sync_status = 14;  // USES_PRIME if is_prime_project=true
+    string qbo_project_id = 15;             // QBO Customer/Project ID (empty if uses prime)
+    string qbo_project_name = 16;           // QBO entity display name
+    google.protobuf.Timestamp last_synced_at = 17;  // Last successful sync for this estimate
+    
+    // === FINANCIAL SUMMARY (from latest QBO snapshot + closeout data) ===
+    // These fields are populated from the most recent P&L sync and UBE closeout tables
+    string as_of_period = 18;               // Period of the latest snapshot (e.g., "Jan 2026")
+    string total_contract_value = 19;       // Estimate selling price + approved COs (decimal string)
+    string total_billed = 20;               // P&L Income for this scope (same QBO window as snapshot; decimal string). Net invoiced is retained internally for reconciliation only.
+    string remaining_to_bill = 21;          // TCV - Billed (decimal string)
+    string over_under_billed = 22;          // Earned - Billed; negative = overbilled (decimal string)
+    string total_earned = 23;               // Effective POC × Total Contract Value, where cost-to-cost uses max(0, base budget + projected additional) unless PM override is set
+    string total_cost = 24;                 // COGS + Expenses from QBO (decimal string)
+    string cost_to_complete = 25;           // max(0, base budget + projected additional) - Cost, then floor at 0 (decimal string)
+    string budget = 26;                     // Effective expected-cost denominator after projected_additional_cost adjustment (decimal string)
+    string projected_gross_margin = 79;     // Total contract value - adjusted effective budget after projected_additional_cost is applied (decimal string)
+    string projected_gross_margin_percentage = 80; // projected_gross_margin / total_contract_value * 100 using the adjusted effective budget
+    
+    // === PERCENTAGE-OF-COMPLETION ===
+    // percent_complete is the EFFECTIVE POC used for earned-value calculations.
+    // It equals the PM override when set (non-zero), otherwise the system cost-to-cost value.
+    double percent_complete = 27;           // 0.0 to 1.0 — effective POC (override or cost-to-cost)
+    string projected_additional_cost = 28;  // PM budget adjustment applied to the base cost-to-cost denominator (decimal string; may be negative, but effective budget never drops below 0)
+    string projected_completion_date = 29;  // Expected completion date (YYYY-MM-DD)
+
+    // Base contract value for this estimate:
+    // - If is_prime_project=true: use the parent contract's prime_contract_value (always)
+    // - If is_prime_project=false: use selling_price when non-zero, else estimated_price
+    // This follows the same rules as ContractBudgetReportPage.tsx getBudgetSellingPrice()
+    string base_contract_value = 30;
+    // Reconciled metrics (QBO actuals + ledger deltas; projected_additional may be negative)
+    string reconciled_total_cost = 32;
+    string reconciled_total_hours = 33;
+    string reconciled_cost_to_complete = 34;  // max(0, base budget + projected additional) - reconciled_cost (may be negative if beating adjusted budget)
+    string reconciliation_delta_cost = 35;
+    string reconciliation_delta_hours = 36;
+    reserved 31;
+
+    // === AUTOMATED COST-TO-COST POC ===
+    // System-calculated POC from reconciled cost / total expected cost.
+    // Always computed regardless of PM override. Used for audit and display.
+    double calculated_percent_complete = 37; // System cost-to-cost POC (0.0 to 1.0, always populated)
+    bool is_poc_override = 38;              // True when PM has manually set a non-zero percent_complete
+    string suggested_catch_up_billing = 39; // max(0, Earned - actual billed/settled basis) — actionable anticipated billing amount (decimal string)
+    string poc_source = 40;                 // "cost_to_cost" or "pm_override" — which source drives percent_complete
+
+    // === SCOPE OWNERSHIP ===
+    string contact_id = 41;                 // Vendor contact ID (independent of internal/external trade type), inherited from estimate
+    string contact_name = 42;               // Vendor name, populated on read
+    bool is_self_performed = 43;            // estimate.is_self_performed (internal trade)
+    reserved 44 to 47;                      // removed legacy aggregate cash fields (no backward compatibility)
+
+    // === EXPLICIT CASH SEMANTICS (scope-aware) ===
+    string cash_tracking_mode = 48;         // "prime_ar", "external_ap", "self_performed_internal"
+    string customer_paid_applied = 49;      // AR customer cash applied (Payment/Invoice)
+    string customer_paid_unapplied = 50;    // AR customer cash unapplied
+    string customer_paid_unassigned = 51;   // AR customer cash unassigned
+    string vendor_billed_total = 52;        // AP vendor billed total (Bill)
+    string vendor_paid_applied = 53;        // AP vendor paid applied (BillPayment)
+    string vendor_paid_unapplied = 54;      // AP vendor paid unapplied
+    string vendor_paid_unassigned = 55;     // AP vendor paid unassigned attribution
+    string internal_settlement_in_total = 56;  // Deprecated: JE-derived audit field; serving path now reports 0.00
+    string internal_settlement_out_total = 57; // Deprecated: JE-derived audit field; serving path now reports 0.00
+    string internal_settlement_net_total = 58; // Self-performed settlement net; mirrors P&L income / total billed
+    bool budget_includes_imputed_default = 59; // True when any POC budget slice fell back to the default imputation ratio of TCV
+
+    // === SCOPE-AWARE CHANGE ORDER METRICS ===
+    // Backend-computed values so frontend does not infer status logic.
+    // Prime approved: Accepted only.
+    // Sub approved: Accepted + Accepted-Internal.
+    // Pending bucket: Pending + Submitted + Work at Risk.
+    // Rejected bucket: Rejected + Declined.
+    // Prime row is a rollup; non-prime rows are local sub metrics.
+    // Prime rollup from subs uses Accepted-only subset for prime total.
+    string prime_approved_co_value = 60;         // prime scope approved CO total (decimal string)
+    int32 prime_approved_co_count = 61;          // prime scope approved CO count
+    string prime_pending_co_value = 62;          // prime scope pending CO total (decimal string)
+    int32 prime_pending_co_count = 63;           // prime scope pending CO count
+    string prime_rejected_co_value = 64;         // prime scope rejected CO total (decimal string)
+    int32 prime_rejected_co_count = 65;          // prime scope rejected CO count
+    string sub_approved_co_value = 66;           // sub scope approved CO total (includes Accepted-Internal)
+    int32 sub_approved_co_count = 67;            // sub scope approved CO count (includes Accepted-Internal)
+    string sub_pending_co_value = 68;            // sub scope pending CO total (decimal string)
+    int32 sub_pending_co_count = 69;             // sub scope pending CO count
+    string sub_rejected_co_value = 70;           // sub scope rejected CO total (decimal string)
+    int32 sub_rejected_co_count = 71;            // sub scope rejected CO count
+    string approved_co_value_for_prime_total = 72; // sub Approved-only value included in prime total
+    int32 approved_co_count_for_prime_total = 73;  // sub Approved-only count included in prime total
+
+    // Dual-track WIP / earned reporting guidance.
+    reserved 74 to 78;                      // PRUNED: contract mapping/list rows do not consume WIP guidance or close-status metadata
+    // Explicit retainage from the accounting system when available; otherwise "0.00".
+    // Do not derive retainage from P&L income minus net invoiced because that gap can
+    // reflect normal tenant account coding rather than customer holdback.
+    string retainage = 81;
+
+    // Department Transfer (settlement) Report fields.
+    string revenue_requested_to_date = 82;        // Explicit requested revenue amount for transfer reporting, this is their total earned income for this scope.
+    string revenue_transferred_to_accounting = 83; // Revenue already transferred (settled) / posted in accounting for this scope
+}
+
+message ContractWithQboMapping {
+    string contract_id = 1;                 // Internal contract UUID
+    string custom_id = 2;                   // User-defined contract ID
+    string contract_name = 3;
+    string contract_description = 4;
+    string prime_contract_value = 5;        // Decimal as string for precision
+    string date_created = 6;
+    string last_updated = 7;
+    string project_id = 8;                  // Parent UBE project ID
+    string project_name = 9;                // Parent UBE project name
+    
+    // QBO mapping information (prime/contract level)
+    QboMappingSyncStatus qbo_sync_status = 10;
+    string qbo_project_id = 11;             // QBO Customer/Project ID for prime
+    string qbo_project_name = 12;           // QBO entity display name
+    google.protobuf.Timestamp last_synced_at = 13;
+    
+    // Associated estimates with their own QBO mappings
+    repeated AssociatedEstimateWithQboMapping associated_estimates = 14;
+    
+    // === FINANCIAL SUMMARY (from latest QBO snapshot + closeout data) ===
+    // These fields are populated from the most recent P&L sync and UBE closeout tables
+    //
+    // NOTE on change order statuses: "Approved" COs are identified by estimate_status.name
+    // values "Accepted" or "Contract Awarded". Do NOT use "Approved" — that is not a valid
+    // status name. See app/db/dbQBO.go and app/services/UBEAPIService.go.
+    //
+    // NOTE on deductive (negative) COs: The is_negative_value flag in
+    // closeout_change_order_total_final_price determines sign. Selling prices
+    // are stored unsigned; the flag must be applied as a multiplier (-1/+1)
+    // when summing. See app/db/dbQBO.go and app/db/dbContractHelpers.go.
+    string as_of_period = 15;               // Period of the latest snapshot (e.g., "Jan 2026")
+    string total_contract_value = 16;       // Prime + SUM(signed approved CO selling prices) (decimal string)
+                                            // Approved CO statuses: "Accepted", "Contract Awarded"
+                                            // Deductive COs subtracted via is_negative_value flag
+    string total_billed = 17;               // P&L Income for this contract (same QBO window as snapshot; decimal string). Net invoiced is retained internally for reconciliation only.
+    string remaining_to_bill = 18;          // TCV - Billed (decimal string)
+    string over_under_billed = 19;          // Earned - Billed; negative = overbilled (decimal string). For PRIME contracts this includes rolled-up earned contribution from non-prime associated estimates while billed remains the PRIME billing basis.
+    string total_earned = 20;               // Contract-native earned from cost-to-cost or PM override, plus rolled-up earned contribution from non-prime associated estimates for PRIME contracts
+    string total_cost = 21;                 // COGS + Expenses from QBO (decimal string)
+    string cost_to_complete = 22;           // max(0, base budget + projected additional) - Cost, then floor at 0 (decimal string)
+    string budget = 23;                     // Effective expected-cost denominator after projected_additional_cost adjustment (decimal string)
+    string projected_gross_margin = 51;     // Total contract value - adjusted effective budget after projected_additional_cost is applied (decimal string)
+    string projected_gross_margin_percentage = 52; // projected_gross_margin / total_contract_value * 100 using the adjusted effective budget
+    
+    // === PERCENTAGE-OF-COMPLETION ===
+    // percent_complete is the EFFECTIVE POC used for earned calculations.
+    // For PRIME contracts it equals the PM override when set; otherwise it reflects
+    // rolled-up earned (prime + non-prime associated estimates) divided by contract TCV.
+    double percent_complete = 24;           // 0.0 to 1.0 — effective POC (override or cost-to-cost)
+    string projected_additional_cost = 25;  // PM budget adjustment applied to the base cost-to-cost denominator (decimal string; may be negative, but effective budget never drops below 0)
+    string projected_completion_date = 26; // Expected completion date (YYYY-MM-DD)
+    // Reconciled metrics (rollup of estimate-level reconciled; may be negative)
+    string reconciled_total_cost = 28;
+    string reconciled_total_hours = 29;
+    string reconciled_cost_to_complete = 30;
+    string reconciliation_delta_cost = 31;
+    string reconciliation_delta_hours = 32;
+    reserved 27;
+
+    // === AUTOMATED COST-TO-COST POC ===
+    // System-calculated POC used for audit and display.
+    // For PRIME contracts this reflects rolled-up earned (prime + non-prime associated
+    // estimates) divided by contract TCV.
+    double calculated_percent_complete = 33; // System cost-to-cost POC (0.0 to 1.0, always populated)
+    bool is_poc_override = 34;              // True when PM has manually set a non-zero percent_complete
+    string suggested_catch_up_billing = 35; // max(0, Earned - actual billed/settled basis) — actionable anticipated billing amount (decimal string). PRIME contracts use rolled-up earned against the existing PRIME billing basis.
+    string poc_source = 36;                 // "cost_to_cost" or "pm_override" — which source drives percent_complete
+    reserved 37 to 40;                      // removed legacy aggregate cash fields (no backward compatibility)
+    string cash_tracking_mode = 41;         // "prime_ar" for contracts
+    string customer_paid_applied = 42;      // Contract AR customer cash applied
+    string customer_paid_unapplied = 43;    // Contract AR customer cash unapplied
+    string customer_paid_unassigned = 44;   // Contract AR customer cash unassigned
+    bool budget_includes_imputed_default = 45; // True when contract POC budget includes default-ratio imputed slices
+
+    // Dual-track WIP / earned reporting guidance.
+    reserved 46 to 50;                      // PRUNED: estimate mapping/list rows do not consume WIP guidance or close-status metadata
+    // Explicit retainage from the accounting system when available; otherwise "0.00".
+    // Do not derive retainage from P&L income minus net invoiced because that gap can
+    // reflect normal tenant account coding rather than customer holdback.
+    string retainage = 53;
+
+    // Department Transfer Report fields.
+    string project_address = 54;             // Parent UBE project street address for transfer reporting
+    string prime_contractor_name = 55;       // Prime contractor division or department (if department / qbo class is mapped) name for transfer reporting
+    string contract_status_id = 56;          // UBE contract lifecycle status UUID
+    string contract_status_name = 57;        // UBE contract lifecycle status label
+    string contract_status_description = 58; // UBE contract lifecycle status help text / description
+}
+
+message AssociatedEstimateStub {
+    string associated_estimate_id = 1;
+    string estimate_id = 2;
+    string breakout_summary_id = 3;
+    string custom_id = 4;
+    string name = 5;
+    string description = 6;
+    string due_date = 7;
+    string date_created = 8;
+    string last_updated = 9;
+    string master_format_division_id = 10;
+    string master_format_division_name = 11;
+    string estimate_status_name = 12;
+    bool is_prime_project = 13;
+    QboMappingSyncStatus qbo_sync_status = 14;
+    string qbo_project_id = 15;
+    string qbo_project_name = 16;
+    google.protobuf.Timestamp last_synced_at = 17;
+    string base_contract_value = 18;
+    string contact_id = 19;
+    string contact_name = 20;
+    bool is_self_performed = 21;            // estimate.is_self_performed (internal trade)
+}
+
+message ContractMappingSummary {
+    // Contract-level financial/mapping data only. associated_estimates is intentionally empty
+    // for staged consumers; use associated_estimate_stubs and lazy detail RPCs for scopes.
+    ContractWithQboMapping contract = 1;
+    repeated AssociatedEstimateStub associated_estimate_stubs = 2;
+    bool is_partial = 3;
+    repeated string degraded_sections = 4;
+}
+
+enum OverUnderBilledFilter {
+    OVER_UNDER_BILLED_FILTER_UNSPECIFIED = 0;  // No filter
+    OVER_UNDER_BILLED_FILTER_OVER = 1;         // Overbilled: billed > earned (over_under < 0)
+    OVER_UNDER_BILLED_FILTER_UNDER = 2;        // Underbilled: billed < earned (over_under > 0)
+}
+
+message ListContractMappingSummariesResponse {
+    repeated ContractMappingSummary summaries = 1;
+    string next_page_token = 2;
+    int32 total_count = 3;
+    int32 contracts_mapped = 4;
+    int32 estimates_mapped = 5;
+    bool is_partial = 6;
+    repeated string degraded_sections = 7;
+}
+
+message GetContractMappingDetailResponse {
+    ContractMappingSummary summary = 1;
+}
+
+message ListAssociatedEstimateMappingDetailsResponse {
+    repeated AssociatedEstimateWithQboMapping associated_estimates = 1;
+    string next_page_token = 2;
+    bool is_partial = 3;
+    repeated string degraded_sections = 4;
+}
+

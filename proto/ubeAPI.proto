@@ -1,0 +1,627 @@
+/*
+protoc --go_out=D:\Unity-Build-BE_GO\app\protosCompiled\ubeAPI
+ --go_opt=paths=source_relative --go-grpc_out=D:\Unity-Build-BE_GO\app\protosCompiled\ubeAPI
+ --go-grpc_opt=paths=source_relative --proto_path=D:\Unity-Build-BE_GO\app\protos D:\Unity-Build-BE_GO\app\protos\ubeAPI.proto
+*/
+
+syntax = "proto3";
+option go_package = "github.com/Lumpy-Studio/Unity-Build-API/gen/go/ubeapi";
+import "financial_reporting_types.proto";
+
+service UBEAPIService {
+    rpc APIGetContracts(APIGetContractsRequest) returns (APIGetContractsResponse) {
+        option deprecated = true;
+    }
+    rpc APIGetBIDirectory(APIGetBIDirectoryRequest) returns (APIGetBIDirectoryResponse);
+    rpc APIGetBIPortfolio(APIGetBIPortfolioRequest) returns (APIGetBIPortfolioResponse);
+    rpc APIGetBIScopeLines(APIGetBIScopeLinesRequest) returns (APIGetBIScopeLinesResponse);
+    rpc APIGetBIExceptions(APIGetBIExceptionsRequest) returns (APIGetBIExceptionsResponse);
+    rpc APIGetBIMetadata(APIGetBIMetadataRequest) returns (APIGetBIMetadataResponse);
+    rpc APIGetFinancialAPIRegistry(APIGetFinancialAPIRegistryRequest) returns (APIGetFinancialAPIRegistryResponse);
+    rpc APIListContractFinancialSummaries(APIListContractFinancialSummariesRequest) returns (APIListContractFinancialSummariesResponse);
+    rpc APIGetContractFinancialDetail(APIGetContractFinancialDetailRequest) returns (APIGetContractFinancialDetailResponse);
+    rpc APIListAssociatedEstimateFinancialDetails(APIListAssociatedEstimateFinancialDetailsRequest) returns (APIListAssociatedEstimateFinancialDetailsResponse);
+    // Portfolio trade/division WIP actuals from completed nightly snapshots.
+    // Does not recalculate WIP, call QuickBooks, or fan out per contract.
+    rpc APIListPortfolioAssociatedEstimateFinancials(APIListPortfolioAssociatedEstimateFinancialsRequest) returns (APIListPortfolioAssociatedEstimateFinancialsResponse);
+    rpc APIListAgentCapabilities(APIListAgentCapabilitiesRequest) returns (APIListAgentCapabilitiesResponse);
+    rpc APIDescribeOperation(APIDescribeOperationRequest) returns (APIDescribeOperationResponse);
+    rpc APISearchTenantEntities(APISearchTenantEntitiesRequest) returns (APISearchTenantEntitiesResponse);
+    rpc APIGetProjectUsers(APIGetProjectUsersRequest) returns (APIGetProjectUsersResponse);
+}
+
+message ProjectURLs{
+    string projectPlanroomURL = 1; //this url wil navigate a user to unity build's planroom for the project
+    string projectContractURL = 2; //this url will navigate a user to unity build's contract report for the project (user permission gated)
+}
+
+// APIContract is the main contract object that contains the prime contract and its associated estimates and change orders
+message APIContract {
+    string contractId = 1; // UBE internal contract UUID
+    string customId = 2; //Associated estimates that share this number are considered prime projects
+    string projectId = 3; // UBE internal project UUID
+    string dateCreated = 4;
+    string lastUpdated = 5;
+    string contractName = 6;
+    string contractDescription = 7;
+    repeated APIAssociatedEstimate associatedEstimates = 8; // associated estimates on the contract; isPrimeProject marks the authoritative prime scope
+    float primeContractValue = 9; //the base contract value
+    float primeContractTotalApprovedChangeOrders = 10; //the total of all approved change orders for the prime contract and its subcontracts
+    float primeContractTotalCurrentContractValue = 11; //the sum of the primeContractValue + primeContractTotalApprovedChangeOrders
+    float totalBudgetLaborHours = 12; //the sum of the prime budgeted labor hours and the subcontractor budgeted labor hours
+    float totalBudget = 13; //total of all known budgets of all departments including the prime contract
+    ProjectURLs projectURLs = 14;
+}
+
+// APIContractBudget is the budget object that contains the budgeted labor hours and the contract values and budgeted costs for the associated estimates and change orders
+message APIContractBudget {
+    float budgetLaborHours = 1; //Sum of Direct, Labor Factoring, Incidental Labor and Indirect Labor hours
+
+    // expense categroies
+    float budgetDirectLaborCost = 2; //Sum of Direct, Labor Factoring and Incidental Labor cost
+    float budgetIndirectLaborCost = 3; //supervisory time, overhead, etc.
+    float budgetMaterialCost = 4; //materials that use stored database values vs a current quote
+    float budgetQuotedMaterialCost = 5; //materials that use a current vendor quote
+    float budgetGeneralExpenseCost = 6; //general expenses, insurance, perdiem, etc.
+    float budgetEquipmentCost = 7; //rental equipment
+    float budgetSubcontractorCost = 8; //subcontractor costs
+
+
+    // income categories
+    float budgetOverheadCost = 9; //overhead costs
+    float budgetProfit = 10; //profit
+    float budgetTotalEstimate = 11; //sum of all costs + profit & overhead -- base contract value -- use this IF budgetSellingPrice is not provided or is zero
+    float budgetSellingPrice= 12; //the actual contract price, if not provided or is zero then use budgetTotalEstimate -- use then where budgetTotalEstimate is not provided or is zero
+}
+
+message APIAssociatedEstimateProgress{
+    float percentComplete = 1; // Billing % Complete: either the cost-to-cost POC or production value POC when provided
+    float budgetOverride = 2; // Budget Override: the value we are adding to the existing budget. If the system defaults a budget to the default imputation ratio of TCV this value should be addded to that value. This value effects cost to complete and projected gross margin.
+    float totalContractValue = 3; // TCV: the total value of the contract
+    float earnedIncome = 4; // Earned: Percent Complete × Total Contract Value
+    float billedIncome = 5; // Billed: Recorded Billings from the user's accounting system
+    float retainedIncome = 6; // Retainage: explicit retainage from the user's accounting system when available; otherwise 0.00
+    float totalBilledDue = 7; // Total Due: the total of the billed income and the retained income
+    float totalBilledPaid = 8; // Total Settled (Paid): the total of the billed income and the retained income that has been paid
+    float overUnderBilled = 9; // (Over)/Under Billed: Earned Income - Billed Income (WIP adjustments)
+    float suggestedCatchUpBilling = 10; // Suggested catch-up: our billing suggestion, capped at the TCV - Previously Billed
+    float costToComplete = 11; // Cost to Complete: the cost to complete the contract
+    float estimatedGrossMargin = 12; // Estimated GM$: TCV - effective budget
+    float estimatedGrossMarginPercentage = 13; // Estimated GM%: Estimated GM$ / TCV
+}
+
+message APIAssociatedEstimate {
+    string estimateId = 1; // UBE internal estimate (breakout summary) UUID
+    string contractId = 2; // UBE internal contract UUID
+    string projectId = 3; // UBE internal project UUID
+    string description = 4;
+    string dueDate = 5;
+    string dateCreated = 6;
+    string name = 7;
+    string customId = 8; // we allow the same custom_id to be used multiple times, you can sum these in your system if they represent the same scope
+    string lastUpdated = 11;
+    string masterFormatDivisionName = 13;
+    string estimateStatusId = 14; // UBE internal estimate status UUID
+    string estimateStatusName = 15;
+    APIContractBudget estimateBudget = 16;
+    repeated APIAssociatedChangeOrder associatedChangeOrders = 17;
+    string masterFormatDivisionId = 18;
+    bool isPrimeProject = 19; // authoritative flag from estimate_contract.is_prime; exactly one true per contract
+    APIAssociatedEstimateProgress progress = 20;
+}
+
+message APIAssociatedChangeOrder {
+    string changeOrderId = 1; // UBE internal change order UUID
+    string description = 2;
+    string dueDate = 3;
+    string dateCreated = 5;
+    string name = 6;
+    string customId = 7;
+    string lastUpdated = 10;
+    string changeOrderStatusId = 11; // UBE internal change order status UUID
+    string changeOrderStatusName = 12;
+    APIContractBudget changeOrderBudget = 13;
+    string contractId = 14; // UBE internal contract UUID
+}
+
+// GetContractsRequest will take an array of contract custom_ids from the users system
+// UBE will attempt to match the user provided ids with UBE's contract.custom_id field and return the contracts
+// Each contract will include all associated estimates (breakout summaries) and their associated change orders
+// If no matches are found then return an empty array and a message saying no matches were found
+// If the apiKey is not valid then return an error message
+// If duplicate custom_ids are provided, they will be deduplicated automatically
+message APIGetContractsRequest {
+    repeated string ids = 1; //contract custom_ids to match to UBE's contract.custom_id field
+    string apiKey = 2;
+}
+
+message APIGetContractsResponse {
+    repeated APIContract contracts = 1;
+    bool success = 2;
+    string message = 3; // Error message or status information
+    repeated APIFieldNote fieldNotes = 4;
+}
+
+// APIFieldNote supplies machine-readable financial field semantics without
+// changing the value-bearing DTOs or their wire compatibility.
+message APIFieldNote {
+    string fieldPath = 1;
+    string title = 2;
+    string description = 3;
+    string source = 4;
+}
+
+message APIListContractFinancialSummariesRequest {
+    string apiKey = 1 [deprecated = true]; // Prefer authorization metadata.
+    int32 pageSize = 2;
+    string pageToken = 3;
+    QboMappingSyncStatus filterStatus = 4;
+    repeated string contractIds = 5;
+    string customerId = 6;
+    string searchTerm = 7;
+    OverUnderBilledFilter overUnderBilledFilter = 8;
+    bool includeNonSelfPerformedScopes = 9;
+    bool includeArchivedProjects = 10;
+}
+
+message APIListContractFinancialSummariesResponse {
+    ListContractMappingSummariesResponse data = 1;
+    repeated APIFieldNote fieldNotes = 2;
+}
+
+message APIGetContractFinancialDetailRequest {
+    string apiKey = 1 [deprecated = true]; // Prefer authorization metadata.
+    string contractId = 2;
+    bool includeNonSelfPerformedScopes = 3;
+    bool includeArchivedProjects = 4;
+}
+
+message APIGetContractFinancialDetailResponse {
+    GetContractMappingDetailResponse data = 1;
+    repeated APIFieldNote fieldNotes = 2;
+}
+
+message APIListAssociatedEstimateFinancialDetailsRequest {
+    string apiKey = 1 [deprecated = true]; // Prefer authorization metadata.
+    string contractId = 2;
+    repeated string associatedEstimateIds = 3;
+    int32 pageSize = 4;
+    string pageToken = 5;
+    bool includeNonSelfPerformedScopes = 6;
+}
+
+message APIListAssociatedEstimateFinancialDetailsResponse {
+    ListAssociatedEstimateMappingDetailsResponse data = 1;
+    repeated APIFieldNote fieldNotes = 2;
+}
+
+// APIPortfolioAEScopeFilter narrows associated estimates by self-performed vs
+// external/subcontract trade. Unspecified means all scopes are included.
+enum APIPortfolioAEScopeFilter {
+    API_PORTFOLIO_AE_SCOPE_FILTER_UNSPECIFIED = 0;
+    API_PORTFOLIO_AE_SCOPE_FILTER_SELF_PERFORMED = 1;
+    API_PORTFOLIO_AE_SCOPE_FILTER_EXTERNAL = 2;
+}
+
+// APIPortfolioAESnapshotAvailability distinguishes missing nightly snapshots
+// from true numeric zeroes so agents do not treat unmapped work as zero cost.
+enum APIPortfolioAESnapshotAvailability {
+    API_PORTFOLIO_AE_SNAPSHOT_AVAILABILITY_UNSPECIFIED = 0;
+    API_PORTFOLIO_AE_SNAPSHOT_AVAILABILITY_AVAILABLE = 1;
+    API_PORTFOLIO_AE_SNAPSHOT_AVAILABILITY_MISSING = 2;
+}
+
+message APIListPortfolioAssociatedEstimateFinancialsRequest {
+    string apiKey = 1 [deprecated = true]; // Prefer authorization metadata.
+    repeated string masterFormatDivisionIds = 2;
+    repeated string projectIds = 3;
+    repeated string contractIds = 4;
+    repeated string associatedEstimateIds = 5; // breakout_summary_id values
+    APIPortfolioAEScopeFilter scopeFilter = 6;
+    bool includeArchivedProjects = 7;
+    string periodEnd = 8; // Optional YYYY-MM-DD; latest completed snapshot when empty
+    int32 pageSize = 9; // defaults to 50, max 200
+    string pageToken = 10; // numeric offset token returned by prior response
+}
+
+message APIPortfolioAssociatedEstimateFinancialRow {
+    string associatedEstimateId = 1; // breakout_summary_id / QBO associated-estimate job key
+    string estimateId = 2;
+    string breakoutSummaryId = 3;
+    string contractId = 4;
+    string contractCustomId = 5;
+    string contractName = 6;
+    string projectId = 7;
+    string projectName = 8;
+    string estimateName = 9;
+    string estimateCustomId = 10;
+    string masterFormatDivisionId = 11;
+    string masterFormatDivisionName = 12;
+    bool isPrimeProject = 13;
+    bool isSelfPerformed = 14;
+    string financialJobId = 15; // contract.id for prime; breakout_summary_id otherwise
+    string financialEntityType = 16; // "contract" or "associated_estimate"
+    APIPortfolioAESnapshotAvailability snapshotAvailability = 17;
+    bool hasSnapshot = 18;
+    string asOfPeriod = 19; // YYYY-MM-DD period_end of the history row
+    string snapshotAt = 20; // RFC3339 snapshot capture time when available
+    string lastSyncedAt = 21; // RFC3339 latest P&L snapshot_at for the financial job
+    string qboMappingStatus = 22; // NOT_MAPPED, MAPPED, USES_PRIME, INACTIVE, etc.
+    string pocSource = 23; // pm_override, cost_to_cost, or empty when unknown
+    optional double totalContractValue = 24;
+    optional double budget = 25;
+    optional double totalCost = 26; // posted cost from nightly WIP snapshot
+    optional double totalBilled = 27;
+    optional double totalEarned = 28;
+    optional double percentComplete = 29; // 0..1
+    optional double overUnderBilled = 30;
+    optional double costToComplete = 31;
+}
+
+message APIListPortfolioAssociatedEstimateFinancialsResponse {
+    repeated APIPortfolioAssociatedEstimateFinancialRow rows = 1;
+    bool success = 2;
+    string message = 3;
+    string nextPageToken = 4;
+    string effectivePeriodEnd = 5; // YYYY-MM-DD basis used for the query
+    int32 matchedRowCount = 6; // rows returned on this page
+    int32 missingSnapshotCount = 7; // rows on this page lacking a completed snapshot
+    repeated APIFieldNote fieldNotes = 8;
+}
+
+message APIListAgentCapabilitiesRequest {
+    string apiKey = 1 [deprecated = true]; // Prefer authorization metadata.
+    string domain = 2;
+    string action = 3;
+    string query = 4;
+}
+
+message APIOperationCapability {
+    string operationId = 1;
+    string grpcFullMethod = 2;
+    string domain = 3;
+    string resource = 4;
+    string action = 5;
+    string requiredPermission = 6;
+    string riskLevel = 7;
+    bool requiresPreview = 8;
+    repeated string requiredReferences = 9;
+}
+
+message APIListAgentCapabilitiesResponse {
+    repeated APIOperationCapability operations = 1;
+    repeated string hardExclusions = 2;
+}
+
+message APIDescribeOperationRequest {
+    string apiKey = 1 [deprecated = true]; // Prefer authorization metadata.
+    string operationId = 2;
+}
+
+message APIDescribeOperationResponse {
+    APIOperationCapability operation = 1;
+    bool allowed = 2;
+    string inputSchemaJson = 3;
+    string outputSchemaJson = 4;
+    repeated APIFieldNote fieldNotes = 5;
+}
+
+message APISearchTenantEntitiesRequest {
+    string apiKey = 1 [deprecated = true]; // Prefer authorization metadata.
+    string query = 2;
+    repeated string entityTypes = 3;
+    int32 pageSize = 4;
+    int32 offset = 5;
+}
+
+message APITenantEntitySummary {
+    string entityType = 1;
+    string id = 2;
+    string parentId = 3;
+    string name = 4;
+    string customId = 5;
+}
+
+message APISearchTenantEntitiesResponse {
+    repeated APITenantEntitySummary entities = 1;
+    int32 nextOffset = 2;
+}
+
+message APIBIRequestScope {
+    string apiKey = 1;
+    repeated string projectIds = 2;
+    repeated string contractIds = 3;
+    repeated string contractCustomIds = 4;
+    string updatedSince = 5; // RFC3339 timestamp; filters rows touched after this time when supported
+    int32 pageSize = 6; // defaults to 100, max 500
+    string pageToken = 7; // numeric offset token returned by prior response
+}
+
+message APIBISourcePolicy {
+    string schemaReference = 1;
+    repeated string includedSources = 2;
+    repeated string excludedSources = 3;
+    string disclaimer = 4;
+}
+
+message APIGetBIDirectoryRequest {
+    string apiKey = 1;
+    repeated string entityTypes = 2; // "project", "contract", "estimate", "change_order"; empty means all
+    string search = 3; // case-insensitive search across names, custom IDs, customer names, statuses, descriptions
+    repeated string projectIds = 4; // Unity Build project UUIDs returned by this API
+    repeated string contractIds = 5; // Unity Build contract UUIDs returned by this API
+    repeated string contractCustomIds = 6; // customer-facing contract numbers
+    string updatedSince = 7; // RFC3339 timestamp
+    int32 pageSize = 8; // defaults to 100, max 500
+    string pageToken = 9; // numeric offset token returned by prior response
+}
+
+message APIBIDirectoryRow {
+    string entityType = 1; // "project", "contract", "estimate", or "change_order"
+    string id = 2;
+    string customId = 3;
+    string name = 4;
+    string description = 5;
+    string statusId = 6;
+    string statusName = 7;
+    string projectId = 8;
+    string projectName = 9;
+    string contractId = 10;
+    string contractCustomId = 11;
+    string estimateId = 12;
+    string customerId = 13;
+    string customerName = 14;
+    string masterFormatDivisionId = 15;
+    string masterFormatDivisionName = 16;
+    string dateCreated = 17;
+    string lastUpdated = 18;
+    string projectPlanroomURL = 19;
+    string projectContractURL = 20;
+}
+
+message APIGetBIDirectoryResponse {
+    repeated APIBIDirectoryRow rows = 1;
+    bool success = 2;
+    string message = 3;
+    string nextPageToken = 4;
+    APIBISourcePolicy sourcePolicy = 5;
+}
+
+message APIGetBIPortfolioRequest {
+    APIBIRequestScope scope = 1;
+    bool includeScheduleActuals = 2 [deprecated = true]; // ignored; schedule-backed values are no longer exposed by machine-facing BI APIs
+}
+
+message APIBIPortfolioRow {
+    string rowType = 1; // "estimate" or "change_order"
+    string projectId = 2;
+    string projectName = 3;
+    string projectStartDate = 4;
+    string projectEndDate = 5;
+    string customerId = 6;
+    string customerName = 7;
+    string contractId = 8;
+    string contractCustomId = 9;
+    string contractName = 10;
+    string contractStatusId = 11;
+    string contractStatusName = 12;
+    string primeContractValue = 13; // Money decimal string with 2 fractional digits; near-zero becomes "0"
+    string estimateId = 14;
+    string estimateCustomId = 15;
+    string estimateName = 16;
+    string estimateStatusId = 17;
+    string estimateStatusName = 18;
+    string breakoutSummaryId = 19;
+    string breakoutSummaryName = 20;
+    bool isIncludedInContractBudget = 21;
+    string masterFormatDivisionId = 22;
+    string masterFormatDivisionName = 23;
+    string changeOrderId = 24;
+    string changeOrderCustomId = 25;
+    string changeOrderName = 26;
+    string changeOrderStatusId = 27;
+    string changeOrderStatusName = 28;
+    string plannedTotalCost = 29; // Money decimal string with 2 fractional digits; near-zero becomes "0"
+    string plannedSellingPrice = 30; // Money decimal string with 2 fractional digits; near-zero becomes "0"
+    string plannedGrossMargin = 31; // Money decimal string with 2 fractional digits; near-zero becomes "0"
+    string plannedGrossMarginPercent = 32; // Decimal string up to 6 fractional digits; near-zero becomes "0"
+    string scheduleBudgetedCost = 33 [deprecated = true]; // retained for wire compatibility; always empty
+    string scheduleActualCost = 34 [deprecated = true]; // retained for wire compatibility; always empty
+    string scheduleRemainingCost = 35 [deprecated = true]; // retained for wire compatibility; always empty
+    string scheduleBudgetedWork = 36 [deprecated = true]; // retained for wire compatibility; always empty
+    string scheduleActualWork = 37 [deprecated = true]; // retained for wire compatibility; always empty
+    string scheduleRemainingWork = 38 [deprecated = true]; // retained for wire compatibility; always empty
+    string projectPlanroomURL = 39;
+    string projectContractURL = 40;
+    string lastUpdated = 41;
+    string percentComplete = 42; // Decimal string up to 6 fractional digits; associated estimate POC as a 0..1 fraction; change_order rows use parent associated estimate POC
+}
+
+message APIGetBIPortfolioResponse {
+    repeated APIBIPortfolioRow rows = 1;
+    bool success = 2;
+    string message = 3;
+    string nextPageToken = 4;
+    APIBISourcePolicy sourcePolicy = 5;
+    repeated APIFieldNote fieldNotes = 6;
+}
+
+message APIGetBIScopeLinesRequest {
+    APIBIRequestScope scope = 1;
+    bool includeQuickLines = 2;
+}
+
+message APIBIScopeLine {
+    string lineId = 1;
+    string documentType = 2; // "estimate" or "change_order"
+    string projectId = 3;
+    string projectName = 4;
+    string contractId = 5;
+    string contractCustomId = 6;
+    string estimateId = 7;
+    string estimateName = 8;
+    string changeOrderId = 9;
+    string changeOrderName = 10;
+    string breakoutId = 11;
+    string breakoutName = 12;
+    string breakoutSummaryId = 13;
+    string masterFormatDivisionId = 14;
+    string masterFormatDivisionName = 15;
+    string itemId = 16;
+    string itemName = 17;
+    string itemSourceType = 18;
+    string assemblyId = 19;
+    string assemblyName = 20;
+    string formulaId = 21;
+    string quoteGroupId = 22;
+    string quoteGroupName = 23;
+    bool isQuoted = 24;
+    bool isQuickLine = 25;
+    string totalItemQty = 26; // Quantity decimal string up to 4 fractional digits; near-zero becomes "0"
+    string totalMaterialCost = 27; // Money decimal string with 2 fractional digits; near-zero becomes "0"
+    string totalLaborHours = 28; // Quantity decimal string up to 4 fractional digits; near-zero becomes "0"
+    string itemUnitCost = 29; // Decimal string up to 6 fractional digits; near-zero becomes "0"
+    string hourlyProductionRate = 30; // Decimal string up to 6 fractional digits; near-zero becomes "0"
+    string unitId = 31;
+    string unitCode = 32;
+    string unitName = 33;
+    string unitValue = 34; // Decimal string up to 6 fractional digits; near-zero becomes "0"
+    string objectId = 35;
+    string objectName = 36;
+    int32 pageNumber = 37;
+    string lastUpdated = 38;
+}
+
+message APIGetBIScopeLinesResponse {
+    repeated APIBIScopeLine rows = 1;
+    bool success = 2;
+    string message = 3;
+    string nextPageToken = 4;
+    APIBISourcePolicy sourcePolicy = 5;
+    repeated APIFieldNote fieldNotes = 6;
+}
+
+message APIGetBIExceptionsRequest {
+    APIBIRequestScope scope = 1;
+    int32 minImpactDollars = 2;
+}
+
+message APIBIException {
+    string exceptionId = 1;
+    string exceptionType = 2;
+    string severity = 3;
+    string title = 4;
+    string description = 5;
+    string estimatedDollarImpact = 6; // Money decimal string with 2 fractional digits; near-zero becomes "0"
+    string ownerHint = 7;
+    string projectId = 8;
+    string projectName = 9;
+    string contractId = 10;
+    string contractCustomId = 11;
+    string estimateId = 12;
+    string changeOrderId = 13;
+    string masterFormatDivisionId = 14;
+    string masterFormatDivisionName = 15;
+    string sourceTable = 16;
+    string sourceId = 17;
+    string recommendedAction = 18;
+    string lastUpdated = 19;
+}
+
+message APIGetBIExceptionsResponse {
+    repeated APIBIException exceptions = 1;
+    bool success = 2;
+    string message = 3;
+    string nextPageToken = 4;
+    APIBISourcePolicy sourcePolicy = 5;
+    repeated APIFieldNote fieldNotes = 6;
+}
+
+message APIGetBIMetadataRequest {
+    string apiKey = 1;
+}
+
+message APIBIMetricDefinition {
+    string name = 1;
+    string description = 2;
+    string source = 3;
+    string confidence = 4;
+    repeated string excludedSources = 5;
+}
+
+message APIGetBIMetadataResponse {
+    repeated APIBIMetricDefinition metrics = 1;
+    APIBISourcePolicy sourcePolicy = 2;
+    bool success = 3;
+    string message = 4;
+}
+
+message APIGetFinancialAPIRegistryRequest {
+    string apiKey = 1;
+}
+
+// APIFinancialAPIStage describes the staged external financial read model.
+// This registry is intentionally metadata-only until stable UBEAPI DTOs can
+// wrap QBO internals without exposing session-authenticated private messages.
+message APIFinancialAPIStage {
+    string stage = 1; // "summary", "detail", "chunk", or "portfolio_chunk"
+    string concept = 2;
+    string description = 3;
+    repeated string requestFields = 4;
+    repeated string responseConcepts = 5;
+    bool metadataOnly = 6;
+}
+
+message APIGetFinancialAPIRegistryResponse {
+    repeated APIFinancialAPIStage stages = 1;
+    bool success = 2;
+    string message = 3;
+    repeated APIFieldNote fieldNotes = 4;
+}
+
+message APIGetProjectUsersRequest {
+    string apiKey = 1;
+    string projectId = 2; // Unity Build project UUID; for convenience this may also be a contract custom ID
+    string contractCustomId = 3; // Used to resolve the project when projectId is not provided as a project UUID
+}
+
+message APIProjectRole {
+    string projectRoleId = 1;
+    string code = 2;
+    string name = 3;
+    string description = 4;
+    repeated string defaultPermissionStrings = 5;
+}
+
+message APIMasterFormatDivision {
+    string masterFormatDivisionId = 1;
+    int32 divisionNumber = 2;
+    string divisionName = 3;
+}
+
+message APIProjectUserAssignment {
+    string assignmentId = 1;
+    APIProjectRole projectRole = 2;
+    APIMasterFormatDivision masterFormatDivision = 3; // Empty when the role assignment is project-wide instead of division-scoped
+    string notes = 4;
+    string createdAt = 5;
+    string updatedAt = 6;
+}
+
+message APIProjectUser {
+    string userId = 1;
+    string name = 2;
+    string email = 3;
+    string userPhotoURL = 4;
+    string firstName = 5;
+    string lastName = 6;
+    repeated APIProjectUserAssignment assignments = 7;
+}
+
+message APIGetProjectUsersResponse {
+    repeated APIProjectUser users = 1;
+    bool success = 2;
+    string message = 3;
+    string projectId = 4;
+    string projectName = 5;
+}

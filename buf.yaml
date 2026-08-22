@@ -1,0 +1,14 @@
+version: v2
+modules:
+  - path: proto
+    name: buf.build/lumpy-studio/unity-build-api
+
+lint:
+  use:
+    - MINIMAL
+  except:
+    - PACKAGE_DEFINED
+
+breaking:
+  use:
+    - WIRE_JSON
