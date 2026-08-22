@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3
+
+- Restore public documentation comments for the extracted financial reporting types.
+
 ## 1.0.1
 
 - Remove backend-local compilation instructions from the distributed source header.

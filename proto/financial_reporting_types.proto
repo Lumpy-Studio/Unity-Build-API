@@ -6,6 +6,8 @@ option go_package = "github.com/Lumpy-Studio/Unity-Build-API/gen/go/financialrep
 
 import "google/protobuf/timestamp.proto";
 
+// QboMappingSyncStatus indicates the QBO mapping state for a contract or
+// associated estimate.
 enum QboMappingSyncStatus {
     QBO_MAPPING_SYNC_STATUS_UNSPECIFIED = 0;   // Default/unknown state
     QBO_MAPPING_SYNC_STATUS_NOT_MAPPED = 1;    // No QBO mapping configured
@@ -14,6 +16,8 @@ enum QboMappingSyncStatus {
     QBO_MAPPING_SYNC_STATUS_USES_PRIME = 4;    // Estimate inherits contract's mapping (isPrimeProject=true)
 }
 
+// AssociatedEstimateWithQboMapping represents an estimate linked to a contract,
+// including its QBO mapping and staged financial reporting state.
 message AssociatedEstimateWithQboMapping {
     string associated_estimate_id = 1;      // Associated estimate relationship ID (used for QBO mapping)
     string estimate_id = 2;                 // Internal estimate UUID
@@ -132,6 +136,8 @@ message AssociatedEstimateWithQboMapping {
     string revenue_transferred_to_accounting = 83; // Revenue already transferred (settled) / posted in accounting for this scope
 }
 
+// ContractWithQboMapping represents a contract with its associated estimates,
+// including QBO mapping and staged financial reporting state.
 message ContractWithQboMapping {
     string contract_id = 1;                 // Internal contract UUID
     string custom_id = 2;                   // User-defined contract ID
@@ -255,6 +261,8 @@ message ContractMappingSummary {
     repeated string degraded_sections = 4;
 }
 
+// OverUnderBilledFilter controls filtering contracts by their billing position.
+// A contract matches if it or any associated estimate has the requested position.
 enum OverUnderBilledFilter {
     OVER_UNDER_BILLED_FILTER_UNSPECIFIED = 0;  // No filter
     OVER_UNDER_BILLED_FILTER_OVER = 1;         // Overbilled: billed > earned (over_under < 0)
@@ -281,4 +289,3 @@ message ListAssociatedEstimateMappingDetailsResponse {
     bool is_partial = 3;
     repeated string degraded_sections = 4;
 }
-
