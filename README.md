@@ -27,10 +27,10 @@ buf generate
 The checked-in generation configuration produces Go, Python, and TypeScript
 bindings. Pin a tagged release for production integrations.
 
-BSR publication starts automatically after the one-time creation of the public
-`buf.build/lumpy-studio/unity-build-api` repository and addition of its `BUF_TOKEN`
-repository secret. No enable/disable repository variable is required. Until that
-credential exists, tagged GitHub releases remain the supported distribution channel.
+The contract is published automatically to the public
+[`buf.build/unity-build/api`](https://buf.build/unity-build/api) module. No
+enable/disable repository variable is required. Tagged GitHub releases remain an
+additional supported distribution channel.
 
 Developer documentation is available at
 [unitybuildestimation.com/api](https://unitybuildestimation.com/api).
