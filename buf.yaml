@@ -1,7 +1,7 @@
 version: v2
 modules:
   - path: proto
-    name: buf.build/lumpy-studio/unity-build-api
+    name: buf.build/unity-build/api
 
 lint:
   use:
