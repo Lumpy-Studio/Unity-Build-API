@@ -1,6 +1,9 @@
 // Public, service-free financial reporting types shared by UBEAPIService and QBOService.
 // Keep this file limited to the transitive message and enum closure required by ubeAPI.proto.
 
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Lumpy Studio
+
 syntax = "proto3";
 option go_package = "github.com/Lumpy-Studio/Unity-Build-API/gen/go/financialreporting";
 

@@ -14,7 +14,8 @@ authorization: Bearer ube_live_…
 ```
 
 `x-api-key` is also accepted. Request-body `apiKey` fields are deprecated and
-must not be used for new integrations.
+must not be used for new integrations. When metadata is supplied it is
+authoritative; an invalid metadata credential is never replaced by a body key.
 
 ## Generate clients
 
@@ -31,6 +32,15 @@ The contract is published automatically to the public
 [`buf.build/unity-build/api`](https://buf.build/unity-build/api) module. No
 enable/disable repository variable is required. Tagged GitHub releases remain an
 additional supported distribution channel.
+
+`APIListAgentCapabilities` and `APIDescribeOperation` are retained for v1 wire
+compatibility but deprecated. Generated SDK and BSR descriptors are the supported
+discovery mechanism for this curated, strongly typed API.
+
+## License
+
+The public protobuf contract is licensed under the Apache License 2.0. See
+[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
 
 Developer documentation is available at
 [unitybuildestimation.com/api](https://unitybuildestimation.com/api).

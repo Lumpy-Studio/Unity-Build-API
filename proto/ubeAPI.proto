@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Lumpy Studio
+
 syntax = "proto3";
 option go_package = "github.com/Lumpy-Studio/Unity-Build-API/gen/go/ubeapi";
 import "financial_reporting_types.proto";
@@ -18,8 +21,14 @@ service UBEAPIService {
     // Portfolio trade/division WIP actuals from completed nightly snapshots.
     // Does not recalculate WIP, call QuickBooks, or fan out per contract.
     rpc APIListPortfolioAssociatedEstimateFinancials(APIListPortfolioAssociatedEstimateFinancialsRequest) returns (APIListPortfolioAssociatedEstimateFinancialsResponse);
-    rpc APIListAgentCapabilities(APIListAgentCapabilitiesRequest) returns (APIListAgentCapabilitiesResponse);
-    rpc APIDescribeOperation(APIDescribeOperationRequest) returns (APIDescribeOperationResponse);
+    // Deprecated: generated SDK descriptors provide discovery for the curated public API.
+    rpc APIListAgentCapabilities(APIListAgentCapabilitiesRequest) returns (APIListAgentCapabilitiesResponse) {
+        option deprecated = true;
+    }
+    // Deprecated: generated SDK descriptors provide schemas for the curated public API.
+    rpc APIDescribeOperation(APIDescribeOperationRequest) returns (APIDescribeOperationResponse) {
+        option deprecated = true;
+    }
     rpc APISearchTenantEntities(APISearchTenantEntitiesRequest) returns (APISearchTenantEntitiesResponse);
     rpc APIGetProjectUsers(APIGetProjectUsersRequest) returns (APIGetProjectUsersResponse);
 }
