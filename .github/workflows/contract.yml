@@ -35,7 +35,7 @@ jobs:
           version: '1.34.0'
       - name: Publish to the Buf Schema Registry
         if: ${{ env.BUF_TOKEN != '' }}
-        run: buf push
+        run: buf push --git-metadata
       - name: Report GitHub-only distribution
         if: ${{ env.BUF_TOKEN == '' }}
         run: echo "::notice::BUF_TOKEN is not configured; the tagged GitHub contract remains the supported distribution channel."
