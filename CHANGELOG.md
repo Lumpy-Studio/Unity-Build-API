@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add paginated project metadata with optional complete user assignments.
+- Add optional prime-contract QBO invoice activity without changing financial calculations.
+- Verify the immutable Buf publication and compile a consumer from its descriptor.
+
 ## 1.0.7
 
 - Standardize public RPC authentication failures on canonical gRPC statuses.

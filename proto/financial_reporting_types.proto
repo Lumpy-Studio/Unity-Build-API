@@ -228,6 +228,7 @@ message ContractWithQboMapping {
     string prime_contractor_name = 55;       // Prime contractor division or department (if department / qbo class is mapped) name for transfer reporting
     string contract_status_id = 56;          // UBE contract lifecycle status UUID
     string contract_status_name = 57;        // UBE contract lifecycle status label
+    BillingActivity billing_activity = 59; // Independent prime customer invoice activity; never used in financial calculations.
     string contract_status_description = 58; // UBE contract lifecycle status help text / description
 }
 
@@ -291,4 +292,14 @@ message ListAssociatedEstimateMappingDetailsResponse {
     string next_page_token = 2;
     bool is_partial = 3;
     repeated string degraded_sections = 4;
+}
+
+// Date-only prime customer billing activity, collected independently of P&L.
+message BillingActivity {
+  optional string last_billed_date = 1; // YYYY-MM-DD; never timezone-convert.
+  string availability = 2; // available, no_qualifying_invoices, not_mapped, ambiguous_mapping, not_collected
+  google.protobuf.Timestamp last_successful_collection_at = 3;
+  string latest_attempt_status = 4; // succeeded, failed, not_attempted
+  string source = 5; // qbo_invoice_txn_date
+  google.protobuf.Timestamp last_attempt_at = 6;
 }

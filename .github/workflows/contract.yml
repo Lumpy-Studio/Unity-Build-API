@@ -41,5 +41,29 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:BUF_TOKEN)) {
             throw 'BUF_TOKEN must be configured for every public API release.'
           }
-      - name: Publish to the Buf Schema Registry
-        run: buf push --git-metadata
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+      - name: Publish and verify the Buf Schema Registry artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          buf push --git-metadata 2>&1 | tee bsr-publication.txt
+          reference=$(grep -Eo 'buf.build/unity-build/api:[a-f0-9]{32}' bsr-publication.txt | tail -1)
+          test -n "$reference"
+          buf build --as-file-descriptor-set --exclude-source-info -o local.binpb
+          buf build "$reference" --as-file-descriptor-set --exclude-source-info -o published.binpb
+          cmp local.binpb published.binpb
+          buf generate "$reference"
+          test -f go.mod || go mod init github.com/Lumpy-Studio/Unity-Build-API
+          go mod tidy
+          go test ./gen/go/...
+          printf 'Git release: %s\nGit commit: %s\nBuf reference: %s\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" "$reference" > release-receipt.txt
+          sha256sum published.binpb >> release-receipt.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-buf-contract-${{ github.sha }}
+          path: |
+            bsr-publication.txt
+            release-receipt.txt
+            published.binpb

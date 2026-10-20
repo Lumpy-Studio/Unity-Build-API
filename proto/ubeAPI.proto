@@ -30,6 +30,7 @@ service UBEAPIService {
         option deprecated = true;
     }
     rpc APISearchTenantEntities(APISearchTenantEntitiesRequest) returns (APISearchTenantEntitiesResponse);
+    rpc APIListProjectMetadata(APIListProjectMetadataRequest) returns (APIListProjectMetadataResponse);
     rpc APIGetProjectUsers(APIGetProjectUsersRequest) returns (APIGetProjectUsersResponse);
 }
 
@@ -627,4 +628,70 @@ message APIGetProjectUsersResponse {
     string message = 3;
     string projectId = 4;
     string projectName = 5;
+}
+
+// Complete authorized project directory. Financial values remain in the staged financial RPCs.
+message APIListProjectMetadataRequest {
+  string apiKey = 1 [deprecated = true]; // Prefer Authorization: Bearer.
+  repeated string projectIds = 2;
+  bool includeArchived = 3;
+  bool includeAssignments = 4;
+  int32 pageSize = 5; // Default 100, maximum 500.
+  string pageToken = 6; // Bound to tenant and filters; not an authorization grant.
+}
+message APIProjectMetadata {
+  string projectId = 1;
+  string name = 2;
+  string address = 3;
+  string startDate = 4;
+  string endDate = 5;
+  string opportunityStatusId = 6;
+  string opportunityStatusName = 7;
+  bool archived = 8;
+  repeated APIProjectCustomer customers = 9;
+  repeated APIProjectExternalLink externalLinks = 10;
+  repeated APIProjectContractReference contracts = 11;
+  repeated APIProjectTrade trades = 12;
+  repeated APIProjectUser users = 13; // All assignments, only when requested.
+}
+message APIProjectCustomer {
+  string id = 1;
+  string customId = 2;
+  string name = 3;
+  string email = 4;
+  string phone = 5;
+}
+message APIProjectExternalLink {
+  string id = 1;
+  string label = 2;
+  string url = 3;
+  string linkType = 4;
+  int32 sortOrder = 5;
+}
+message APIProjectContractReference {
+  string contractId = 1;
+  string customId = 2;
+  string contractName = 3;
+  string contractStatusId = 4;
+  string contractStatusName = 5;
+}
+message APIProjectTrade {
+  string id = 1; // Estimate UUID, not a breakout-summary UUID.
+  string masterFormatDivisionId = 2;
+  int32 divisionNumber = 3;
+  string divisionName = 4;
+  bool isInternalTrade = 5;
+  bool isPrime = 6;
+  repeated APIProjectTradeScope breakoutSummaries = 7;
+}
+message APIProjectTradeScope {
+  string id = 1; // Breakout-summary UUID; authoritative scope identity.
+  string customId = 2; // Scope job number.
+  string name = 3;
+  string contractId = 4;
+}
+message APIListProjectMetadataResponse {
+  repeated APIProjectMetadata projects = 1;
+  string nextPageToken = 2;
+  string retrievedAt = 3; // Metadata retrieval time, not a financial snapshot timestamp.
 }
