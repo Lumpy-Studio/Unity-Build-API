@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add delegated `CreateChangeOrderIntake` submission into Intake Staging with durable, actor-bound retry receipts.
+
+- Add `GetAccountUsers` and `GetAccountUser` for delegated tenant user identity lookup.
+
 - Add paginated project metadata with optional complete user assignments.
 - Add optional prime-contract QBO invoice activity without changing financial calculations.
 - Verify the immutable Buf publication and compile a consumer from its descriptor.

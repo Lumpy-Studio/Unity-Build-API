@@ -6,6 +6,13 @@ option go_package = "github.com/Lumpy-Studio/Unity-Build-API/gen/go/ubeapi";
 import "financial_reporting_types.proto";
 
 service UBEAPIService {
+    // Submit to Intake Staging only; review and conversion remain inside Unity.
+    // Requires delegated x-api-key and x-unity-user-id metadata.
+    rpc CreateChangeOrderIntake(APICreateChangeOrderIntakeRequest) returns (APICreateChangeOrderIntakeResponse);
+    // API-key-only tenant directory. Returns all account members; membership does not grant delegation.
+    rpc GetAccountUsers(APIGetAccountUsersRequest) returns (APIGetAccountUsersResponse);
+    // Exact, case-insensitive email lookup within the authenticated key's tenant.
+    rpc GetAccountUser(APIGetAccountUserRequest) returns (APIGetAccountUserResponse);
     rpc APIGetContracts(APIGetContractsRequest) returns (APIGetContractsResponse) {
         option deprecated = true;
     }
@@ -32,6 +39,9 @@ service UBEAPIService {
     rpc APISearchTenantEntities(APISearchTenantEntitiesRequest) returns (APISearchTenantEntitiesResponse);
     rpc APIListProjectMetadata(APIListProjectMetadataRequest) returns (APIListProjectMetadataResponse);
     rpc APIGetProjectUsers(APIGetProjectUsersRequest) returns (APIGetProjectUsersResponse);
+    // Read-only saved close evidence for independent worksheet reconciliation.
+    rpc APIListWipCloseRevisions(APIListWipCloseRevisionsRequest) returns (APIListWipCloseRevisionsResponse);
+    rpc APIGetWipCloseWorkbookData(APIGetWipCloseWorkbookDataRequest) returns (APIGetWipCloseWorkbookDataResponse);
 }
 
 message ProjectURLs{
@@ -694,4 +704,126 @@ message APIListProjectMetadataResponse {
   repeated APIProjectMetadata projects = 1;
   string nextPageToken = 2;
   string retrievedAt = 3; // Metadata retrieval time, not a financial snapshot timestamp.
+}
+
+// WIP monetary values are exact decimal strings. Dates use YYYY-MM-DD and
+// captures use RFC3339. Saved forecast inputs can restate a past period; they
+// are not evidence of the forecast originally approved at that historical close.
+message APIWipCloseAccount { string id = 1; string number = 2; }
+message APIWipCloseAccounts {
+  APIWipCloseAccount current = 1; APIWipCloseAccount prior_current_year = 2; APIWipCloseAccount prior_year = 3;
+  APIWipCloseAccount balance_sheet = 4; string evidence = 5;
+}
+message APIWipCloseActual {
+  string as_of = 1; string cost = 2; string pre_wip_revenue = 3;
+  string evidence = 4; bool complete = 5; APIWipCloseActualBasis basis = 6;
+}
+message APIWipCloseActualBasis { string reported_income = 1; string reported_cost = 2; string posted_wip_income = 3; string posted_wip_cost = 4; }
+message APIWipCloseExclusion { string reason = 1; string evidence = 2; string reviewed_by = 3; }
+message APIWipCloseJob {
+  string scope_id = 1; string name = 2; string contract_value = 3;
+  string expected_cost = 4; string forecast_evidence = 5;
+  repeated APIWipCloseActual actuals = 6; APIWipCloseExclusion exclusion = 7;
+}
+message APIWipCloseLedger {
+  string as_of = 1; string posted_month_current = 2; string posted_ytd_current = 3;
+  string posted_ytd_prior_current_year = 4; string book_wip = 5;
+  string evidence = 6; bool complete = 7;
+}
+message APIWipCloseLine { APIWipCloseAccount account = 1; string credit_positive = 2; string origin = 3; }
+message APIWipCloseAdjustment {
+  string id = 1; string reason = 2; string evidence = 3;
+  string author = 4; repeated APIWipCloseLine lines = 5;
+}
+message APIWipCloseIssue { string section = 1; string scope_id = 2; string code = 3; string message = 4; }
+message APIWipCloseTotal { string as_of = 1; string wip = 2; string displayed_job_sum = 3; string rounding_bridge = 4; }
+message APIWipCloseSummary {
+  string id = 1; int32 revision = 2; string created_at = 3;
+  bool ready_for_review = 4; bool approved = 5; string input_sha256 = 6;
+}
+message APIListWipCloseRevisionsRequest {
+  string department_id = 1;
+  string period_end = 2; // Calendar month end, YYYY-MM-DD.
+  int32 before_revision = 3;
+  int32 page_size = 4; // Default 25, maximum 100.
+}
+message APIListWipCloseRevisionsResponse {
+  repeated APIWipCloseSummary items = 1;
+  int32 next_before_revision = 2; // Zero means no more pages.
+}
+message APIGetWipCloseWorkbookDataRequest {
+  string close_id = 1;
+  bool prior_year = 2; // Fails if this revision did not capture that section.
+  int32 offset = 3;
+  int32 page_size = 4; // Default 100, maximum 200.
+  string expected_payload_sha256 = 5; // Required after page one; pin its returned hash.
+}
+message APIGetWipCloseWorkbookDataResponse {
+  string close_id = 1;
+  int32 revision = 2;
+  string department_id = 3;
+  string period_end = 4;
+  string class_id = 5;
+  string captured_at = 6;
+  string payload_sha256 = 7;
+  string input_sha256 = 8;
+  string calculator_version = 9;
+  bool approved = 10;
+  bool ready_for_review = 11; // Applies to the entire saved package.
+  bool prior_year = 12;
+  bool has_prior_year = 13;
+  string source_evidence = 14;
+  APIWipCloseAccounts accounts = 15;
+  APIWipCloseLedger ledger = 16;
+  repeated APIWipCloseAdjustment adjustments = 17;
+  repeated APIWipCloseIssue issues = 18; // Entire package, including issues without a job row.
+  repeated APIWipCloseJob jobs = 19; // Raw inputs, not calculated job WIP.
+  int32 total = 20;
+  int32 next_offset = 21; // Zero means the selected section is complete.
+  // Comparison outputs only. Never feed these back into worksheet input formulas.
+  repeated APIWipCloseTotal comparison_totals = 22;
+  repeated APIWipCloseLine comparison_postings = 23;
+  string reversal_date = 24;
+  repeated APIWipCloseLine comparison_reversal = 25;
+}
+
+// Metadata authentication only: x-api-key. No caller-supplied tenant identifier.
+message AccountUserIdentity {
+    string email = 1;
+    string userId = 2;
+}
+message APIGetAccountUsersRequest {}
+message APIGetAccountUsersResponse { repeated AccountUserIdentity users = 1; }
+message APIGetAccountUserRequest { string email = 1; }
+message APIGetAccountUserResponse { string userId = 1; }
+
+// A stable client UUID is required. Identical retries return the original intake;
+// reusing the UUID with different content is rejected. No tenant/actor payload fields.
+message APICreateChangeOrderIntakeRequest {
+    string requestId = 1;
+    string projectId = 2;
+    string title = 3;
+    string description = 4;
+    string requesterName = 5;
+    string requesterEmail = 6; // Defaults to represented user's current account email.
+    string requesterPhone = 7;
+    string requesterJobTitle = 8;
+    string requesterCompany = 9;
+    string urgency = 10; // normal (default), urgent
+    string workState = 11; // not_started (default), in_process, completed
+    string cause = 12;
+    string materialCostNotes = 13;
+    string supportingUrl = 14; // Optional http/https evidence link; no automatic fetching.
+    // Routing is optional. If supplied, all four scope IDs must be provided and
+    // identify an active contract-backed scope in the selected tenant/project.
+    string contractId = 15;
+    string estimateId = 16;
+    string estimateBreakoutSummaryId = 17;
+    string masterFormatDivisionId = 18;
+}
+message APICreateChangeOrderIntakeResponse {
+    string intakeId = 1;
+    string receiptId = 2;
+    string state = 3; // new on create; current state on retry, or committed_unavailable if deleted.
+    bool replayed = 4;
 }

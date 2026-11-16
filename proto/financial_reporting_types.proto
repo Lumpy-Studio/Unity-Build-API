@@ -71,7 +71,7 @@ message AssociatedEstimateWithQboMapping {
     // Reconciled metrics (QBO actuals + ledger deltas; projected_additional may be negative)
     string reconciled_total_cost = 32;
     string reconciled_total_hours = 33;
-    string reconciled_cost_to_complete = 34;  // max(0, base budget + projected additional) - reconciled_cost (may be negative if beating adjusted budget)
+    string reconciled_cost_to_complete = 34;  // max(0, max(0, base budget + projected additional) - reconciled_cost)
     string reconciliation_delta_cost = 35;
     string reconciliation_delta_hours = 36;
     reserved 31;
